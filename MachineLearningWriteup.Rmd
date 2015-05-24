@@ -1,0 +1,149 @@
+
+##Machine Learning : Prediction of Human Activity Recognition Quality using RandomForest model by Darren Freeman
+
+**Purpose:**  The purpose of the report is to demontracte the use of machine learning in the prediction of human activity quality based on fitness movement devices such as FitBit.  The training data provided will be use to create a model which a test data set will be run against to predict the outcomes of the unknown exercise classe as define below.
+
+Defined Exercise Classe Variables:
+(Class A): exactly according to the specification
+(Class B): throwing the elbows to the front 
+(Class C): lifting the dumbbell only halfway
+(Class D): lowering the dumbbell only halfway 
+(Class E): throwing the hips to the front 
+
+###Does the submission build a machine learning algorithm to predict activity quality from activity monitors?
+
+``` {r,echo=FALSE,warning=FALSE}
+library(rpart)
+library(caret)
+library(randomForest)
+```
+
+```{r,echo=FALSE}
+# Import Training and Testing Data from the files - convert NA and #DIV/0 to NA values
+plmtraining <-read.csv("pml-training.csv",header=TRUE,sep=",",quote="\"",na.strings=c("NA","#DIV/0!"))
+plmtesting  <-read.csv("pml-testing.csv",header=TRUE,sep=",",quote="\"",na.strings=c("NA","#DIV/0!"))
+```
+
+**Tidy and cleaning the data**
+
+In following with tidy data principles, several columns in the data set contained 100% NA values for each record.  Due to this missing data, those columns were removed completed and not used in the data analysis.
+
+```{r,echo=FALSE}
+# Remove Columns with 100% NA values in the training and test set
+# Below listed columns were removed from the dataset due to the fact the entire column contained only NA values.
+plmtraining<-subset(plmtraining, select=-c(kurtosis_yaw_belt,skewness_yaw_belt,kurtosis_yaw_dumbbell,skewness_yaw_dumbbell,kurtosis_yaw_forearm,skewness_yaw_forearm))
+plmtesting<-subset(plmtesting, select=-c(kurtosis_yaw_belt,skewness_yaw_belt,kurtosis_yaw_dumbbell,skewness_yaw_dumbbell,kurtosis_yaw_forearm,skewness_yaw_forearm))
+```
+
+**Remove un-needed columns which would complicate and slow down data analysis**
+
+Also in the data set were a number of columns which did not provide any useful data for the analysis.  Columns such as user name, time stamp and several others were removed to reduce the data analysis complexity.
+
+```{r,echo=FALSE}
+# Remove Columns with un-needed data
+# Some columns in the dataset contained 
+plmtraining<-subset(plmtraining, select=-c(X,user_name,raw_timestamp_part_1,raw_timestamp_part_2,cvtd_timestamp,new_window,num_window))
+plmtesting<-subset(plmtesting, select=-c(raw_timestamp_part_1,raw_timestamp_part_2,new_window,num_window))
+```
+
+**Remove columns with an excessive number of records with NA values compared to those records with real values**
+
+Finally, a number of columns had some data for a few records, however and vast majority of the values for thos columns contained NA values.  Becuase there wasn't a significant enough amount of data for those columns they were also removed from consideration in the analysis.
+
+
+```{r,echo=FALSE}
+# Remove Columns an excessive number of NA
+plmtraining<-subset(plmtraining, select=c(roll_belt,pitch_belt,yaw_belt,total_accel_belt,gyros_belt_x,gyros_belt_y,gyros_belt_z,accel_belt_x,accel_belt_y,accel_belt_z,magnet_belt_x,magnet_belt_y,magnet_belt_z,roll_arm,pitch_arm,yaw_arm,total_accel_arm,gyros_arm_x,gyros_arm_y,gyros_arm_z,accel_arm_x,accel_arm_y,accel_arm_z,magnet_arm_x,magnet_arm_y,magnet_arm_z,roll_dumbbell,pitch_dumbbell,yaw_dumbbell,total_accel_dumbbell,gyros_dumbbell_x,gyros_dumbbell_y,gyros_dumbbell_z,accel_dumbbell_x,accel_dumbbell_y,accel_dumbbell_z,magnet_dumbbell_x,magnet_dumbbell_y,magnet_dumbbell_z,roll_forearm,pitch_forearm,yaw_forearm,total_accel_forearm,gyros_forearm_x,gyros_forearm_y,gyros_forearm_z,accel_forearm_x,accel_forearm_y,accel_forearm_z,magnet_forearm_x,magnet_forearm_y,magnet_forearm_z,classe))
+                    
+plmtesting<-subset(plmtesting, select=c(X,user_name,cvtd_timestamp,roll_belt,pitch_belt,yaw_belt,total_accel_belt,gyros_belt_x,gyros_belt_y,gyros_belt_z,accel_belt_x,accel_belt_y,accel_belt_z,magnet_belt_x,magnet_belt_y,magnet_belt_z,roll_arm,pitch_arm,yaw_arm,total_accel_arm,gyros_arm_x,gyros_arm_y,gyros_arm_z,accel_arm_x,accel_arm_y,accel_arm_z,magnet_arm_x,magnet_arm_y,magnet_arm_z,roll_dumbbell,pitch_dumbbell,yaw_dumbbell,total_accel_dumbbell,gyros_dumbbell_x,gyros_dumbbell_y,gyros_dumbbell_z,accel_dumbbell_x,accel_dumbbell_y,accel_dumbbell_z,magnet_dumbbell_x,magnet_dumbbell_y,magnet_dumbbell_z,roll_forearm,pitch_forearm,yaw_forearm,total_accel_forearm,gyros_forearm_x,gyros_forearm_y,gyros_forearm_z,accel_forearm_x,accel_forearm_y,accel_forearm_z,magnet_forearm_x,magnet_forearm_y,magnet_forearm_z))
+```
+
+```{r,echo=FALSE}
+# Define classe as a factor to improve the rate which the model is generated.
+plmtraining$classe<-as.factor(plmtraining$classe)  # Create classe column as a factor
+```
+
+**Define the in sample data on the training data and perform cross-validation on training set**
+
+```{r}
+set.seed(1895)
+inTrain<-createDataPartition(plmtraining$classe,p=0.75,list=FALSE)   # Define the slips in the data
+CVtraining<-plmtraining[inTrain,]                                    # Subset the cross validation training data
+CVtesting<-plmtraining[-inTrain,]                                    # Subset the cross validation testing data
+CVmodel<-randomForest(classe ~., data=CVtraining)                    # Execute the model on the cross validation data
+CVtesting$prediction<-predict(CVmodel,CVtesting,type="class")        # Generate the predictions and add them back to the cv testing data
+```
+
+**Seed and create the Random Forest model on entire training set**
+
+```{r}
+# Perform model analysis using random forest model on the entire training set
+set.seed(1895)
+plmtrainingtree2 <- randomForest(classe ~., data=plmtraining)      #create randomforest model
+plmprediction2<-predict(plmtrainingtree2,plmtesting,type="class")  #Predict the outcomes on the real testing data
+```
+
+**Predict the outcomes using the created model on the testing data**
+
+```{r}
+# Create a final output of the X,user_name,timestamp and prediction for output
+finalresults<-subset(plmtesting,select=c(X,user_name,cvtd_timestamp))
+finalresults$prediction<-plmprediction2
+```
+
+###Predictions and result outcomes:
+
+**What is the expected out of sample error and estimate the error with cross-validation?**
+
+```{r}
+# Plot the outcome from the confusion matrix from the in sample model on the testing data
+confusionMatrix(CVtesting$prediction,CVtesting$classe)
+```
+
+As you can see from the above confusion matrix output.  The accuracy of the random forest model using in sample training and testing is very high.  An accuracy rate of 0.9963, a 95% CI of (0.9942, 0.9978) and a P-value of < 2.2e-16.  The sensitivity and specificity of the model is also very high for each class with a value no less than 0.9888 for all the classes. 
+
+**Actual outcome from using the model on the entire dataset.**
+
+```{r}
+plmtrainingtree2
+```
+
+The estimated out of the bag error rate for this model is 0.33%.  In addition to looking actual model results it can be seen that error for all classes is less than 0.4%.  
+
+```{r}
+finalresults  # Print the final results
+```
+
+Above is a table with the final predicted results from the model on the training data.
+
+**Plot error rates for each class and Out of bag error**
+
+```{r}
+# Plot tree as is without text
+layout(matrix(c(1,2),nrow=1),width=c(4,1))
+par(mar=c(5,4,4,0)) 
+plot(plmtrainingtree2,log="y")
+par(mar=c(5,0,4,2))
+legend("top", colnames(plmtrainingtree2$err.rate),col=1:4,cex=0.8,fill=1:4)
+```
+
+**Plot of variable importance in predicting outcome variable for testing data**
+
+```{r}
+varImpPlot(plmtrainingtree2)  # Plot chart to display importance of variables in dataset
+```
+
+###Conclusions:
+
+In evaluating the data, statistics, lower error rates and high sensitivity and specificity rates as well as the additional data produced in the in training sample confusion matrix, the random forest model selected for this analysis is highly accurate.  Further analysis could be performed to absolutely determine the accurancy of the model however give that the random forest model has such a high level of percision this additional effort won't be necessary.
+
+
+###References:
+
+**Important:** you are free to use this dataset for any purpose. This dataset is licensed under the Creative Commons license (CC BY-SA). The CC BY-SA license means you can remix, tweak, and build upon this work even for commercial purposes, as long as you credit the authors of the original work and you license your new creations under the identical terms we are licensing to you. This license is often compared to "copyleft" free and open source software licenses. All new works based on this dataset will carry the same license, so any derivatives will also allow commercial use.
+
+Ugulino, W.; Cardador, D.; Vega, K.; Velloso, E.; Milidiu, R.; Fuks, H. Wearable Computing: Accelerometers' Data Classification of Body Postures and Movements. Proceedings of 21st Brazilian Symposium on Artificial Intelligence. Advances in Artificial Intelligence - SBIA 2012. In: Lecture Notes in Computer Science. , pp. 52-61. Curitiba, PR: Springer Berlin / Heidelberg, 2012. ISBN 978-3-642-34458-9. DOI: 10.1007/978-3-642-34459-6_6. 
+Cited by 2 (Google Scholar)
+
+
+
